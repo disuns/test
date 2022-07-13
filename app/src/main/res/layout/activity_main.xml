@@ -8,14 +8,13 @@
     tools:context=".MainActivity">
 
     <Button
+        android:id="@+id/btnScanBLE"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+    <Button
         android:id="@+id/btnReadData"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
-    <TextView
-        android:id="@+id/tvBluetoothOnOff"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="bluetooth"/>
 
 
 </LinearLayout>
