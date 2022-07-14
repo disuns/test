@@ -13,7 +13,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ParcelUuid
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.example.test.databinding.ActivityMainBinding
@@ -21,11 +20,11 @@ import java.util.*
 import kotlin.concurrent.schedule
 import kotlin.experimental.and
 
-
 class MainActivity : AppCompatActivity() {
-    lateinit var binding: ActivityMainBinding
+    private lateinit var binding: ActivityMainBinding
     lateinit var mBluetoothAdapter: BluetoothAdapter
-
+    private val mBluetoothManager : BluetoothManager by lazy { applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager }
+    private var mBleGatt: BluetoothGatt? = null
     lateinit var mDevice: BluetoothDevice
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,75 +32,43 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val bluetoothManager =
-            applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        mBluetoothAdapter = bluetoothManager.adapter
+        mBluetoothAdapter = mBluetoothManager.adapter
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            requestPermissions(
-                arrayOf(
-                    Manifest.permission.BLUETOOTH,
-                    Manifest.permission.BLUETOOTH_CONNECT,
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ),
-                1
-            )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            requestPermissions(
-                arrayOf(
-                    Manifest.permission.BLUETOOTH
-                ),
-                1
-            )
-        }
+        permissionRequest()
 
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             return
         }
 
-
-        binding.btnScanBLE.setOnClickListener {
+        binding.btnConnect.setOnClickListener {
             val filters: MutableList<ScanFilter> = ArrayList()
-            val scanFilter: ScanFilter = ScanFilter.Builder()
-                .setServiceUuid(ParcelUuid(UUID.fromString("00001809-0000-1000-8000-00805F9B34FB")))
-                .build()
+            val scanFilter: ScanFilter = ScanFilter.Builder().setServiceUuid(ParcelUuid(UUID.fromString("00001809-0000-1000-8000-00805F9B34FB"))).build()
             filters.add(scanFilter)
             val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_POWER).build()
 
             mBluetoothAdapter.bluetoothLeScanner.startScan(filters, settings, BLEScanCallback)
             Timer("SettingUp", false).schedule(3000) { stopScan() } }
-
-        binding.btnReadData.setOnClickListener {
-            bleGatt = mDevice.connectGatt(applicationContext, false, gattClientCallback)
-        }
     }
 
     @SuppressLint("MissingPermission")
-    private val BLEScanCallback: ScanCallback = @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    object : ScanCallback() {
+    private val BLEScanCallback: ScanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             super.onScanResult(callbackType, result)
             mDevice = result.device
-            Log.e("", "onScanResult device name: " + result.device.name)
+            Log.d("", "onScanResult device name: " + result.device.name)
         }
 
         override fun onBatchScanResults(results: List<ScanResult>) {
             for (result in results) {
-                Log.e("", "onBatchScanResults device name: " + result.device.name)
+                Log.d("", "onBatchScanResults device name: " + result.device.name)
             }
         }
 
         override fun onScanFailed(_error: Int) {
-            Log.e("", "BLE scan failed with code $_error")
+            Log.d("", "BLE scan failed with code $_error")
         }
     }
 
-    private var bleGatt: BluetoothGatt? = null
     private val gattClientCallback: BluetoothGattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
@@ -127,7 +94,6 @@ class MainActivity : AppCompatActivity() {
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             super.onServicesDiscovered(gatt, status)
 
-
             // check if the discovery failed
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Log.e("", "Device service discovery failed, status: $status")
@@ -137,19 +103,6 @@ class MainActivity : AppCompatActivity() {
             // log for successful discovery
             Log.d("", "Services discovery is successful")
             enableNotify(gatt)
-//            if (status === BluetoothGatt.GATT_SUCCESS) {
-//                for (gattService in gatt!!.services) {
-//                    Log.i("", "Service UUID Found: " + gattService.uuid.toString())
-////                    if(gattService.uuid == UUID.fromString("00001809-0000-1000-8000-00805F9B34FB")){
-//                        val characteristic: BluetoothGattCharacteristic = gattService.characteristics[0]
-//                    if(characteristic.value!=null)
-//                        Log.e("", characteristic.value.toString())
-//
-//                        gatt.readCharacteristic(characteristic)
-////                    }
-//                }
-//
-//            }
         }
 
         override fun onCharacteristicChanged(
@@ -181,15 +134,6 @@ class MainActivity : AppCompatActivity() {
             status: Int
         ) {
             super.onCharacteristicRead(gatt, characteristic, status)
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d("", "Characteristic read successfully")
-                readCharacteristic(characteristic)
-            } else {
-                Log.e("", "Characteristic read unsuccessful, status: $status")
-                // Trying to read from the Time Characteristic? It doesnt have the property or permissions
-                // set to allow this. Normally this would be an error and you would want to:
-                // disconnectGattServer();
-            }
         }
 
         /**
@@ -197,9 +141,10 @@ class MainActivity : AppCompatActivity() {
          * @param characteristic
          */
         private fun readCharacteristic(characteristic: BluetoothGattCharacteristic) {
-
-            val msg = characteristic.value
-            Log.e("", getParsingTemperature(msg))
+            Log.e("", getParsingTemperature(characteristic.value))
+            runOnUiThread {
+                binding.tvTemperature.text = getParsingTemperature(characteristic.value)
+            }
         }
 
 
@@ -212,21 +157,20 @@ class MainActivity : AppCompatActivity() {
     fun disconnectGattServer() {
         Log.d("", "Closing Gatt connection")
         // disconnect and close the gatt
-        if (bleGatt != null) {
-            bleGatt!!.disconnect()
-            bleGatt!!.close()
+        if (mBleGatt != null) {
+            mBleGatt!!.disconnect()
+            mBleGatt!!.close()
         }
     }
 
     @SuppressLint("MissingPermission")
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
     fun stopScan() {
         mBluetoothAdapter.bluetoothLeScanner?.stopScan(BLEScanCallback)
+        mBleGatt = mDevice.connectGatt(applicationContext, false, gattClientCallback)
     }
 
     @SuppressLint("MissingPermission")
     private fun enableNotify(gatt: BluetoothGatt?) {
-
         val service = gatt?.getService(UUID.fromString("00001809-0000-1000-8000-00805F9B34FB"))
         val characteristic = service!!.getCharacteristic(UUID.fromString("00002a1c-0000-1000-8000-00805F9B34FB"))
 
@@ -242,7 +186,6 @@ class MainActivity : AppCompatActivity() {
         }
 
     }
-
 
     /**
      * 장비에서 수신한 체온값을 변환
@@ -272,6 +215,27 @@ class MainActivity : AppCompatActivity() {
         }
         else {
             return "0.0"
+        }
+    }
+
+    private fun permissionRequest(){
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH,
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ),
+                1
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH
+                ),
+                1
+            )
         }
     }
 }
