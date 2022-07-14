@@ -19,6 +19,7 @@ import androidx.core.app.ActivityCompat
 import com.example.test.databinding.ActivityMainBinding
 import java.util.*
 import kotlin.concurrent.schedule
+import kotlin.experimental.and
 
 
 class MainActivity : AppCompatActivity() {
@@ -77,8 +78,6 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnReadData.setOnClickListener {
             bleGatt = mDevice.connectGatt(applicationContext, false, gattClientCallback)
-            setNotifications()
-            readData()
         }
     }
 
@@ -137,6 +136,20 @@ class MainActivity : AppCompatActivity() {
 
             // log for successful discovery
             Log.d("", "Services discovery is successful")
+            enableNotify(gatt)
+//            if (status === BluetoothGatt.GATT_SUCCESS) {
+//                for (gattService in gatt!!.services) {
+//                    Log.i("", "Service UUID Found: " + gattService.uuid.toString())
+////                    if(gattService.uuid == UUID.fromString("00001809-0000-1000-8000-00805F9B34FB")){
+//                        val characteristic: BluetoothGattCharacteristic = gattService.characteristics[0]
+//                    if(characteristic.value!=null)
+//                        Log.e("", characteristic.value.toString())
+//
+//                        gatt.readCharacteristic(characteristic)
+////                    }
+//                }
+//
+//            }
         }
 
         override fun onCharacteristicChanged(
@@ -144,7 +157,7 @@ class MainActivity : AppCompatActivity() {
             characteristic: BluetoothGattCharacteristic
         ) {
             super.onCharacteristicChanged(gatt, characteristic)
-            //Log.d(TAG, "characteristic changed: " + characteristic.uuid.toString())
+            Log.d("", "characteristic changed: " + characteristic.uuid.toString())
             readCharacteristic(characteristic)
         }
 
@@ -185,8 +198,8 @@ class MainActivity : AppCompatActivity() {
          */
         private fun readCharacteristic(characteristic: BluetoothGattCharacteristic) {
 
-            val msg = characteristic.getStringValue(0)
-            Log.e("", msg)
+            val msg = characteristic.value
+            Log.e("", getParsingTemperature(msg))
         }
 
 
@@ -211,42 +224,54 @@ class MainActivity : AppCompatActivity() {
         mBluetoothAdapter.bluetoothLeScanner?.stopScan(BLEScanCallback)
     }
 
+    @SuppressLint("MissingPermission")
+    private fun enableNotify(gatt: BluetoothGatt?) {
 
-    lateinit var charac : BluetoothGattCharacteristic
-    lateinit var desc : BluetoothGattDescriptor
-    fun setNotifications() {
-        val btGattServicesList: List<BluetoothGattService> = bleGatt!!.services
-        for(b in btGattServicesList.indices){
-            btGattServicesList[b].characteristics
+        val service = gatt?.getService(UUID.fromString("00001809-0000-1000-8000-00805F9B34FB"))
+        val characteristic = service!!.getCharacteristic(UUID.fromString("00002a1c-0000-1000-8000-00805F9B34FB"))
+
+        gatt.setCharacteristicNotification(characteristic, true)
+
+        characteristic?.let {
+            val descriptor = characteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805F9B34FB"))
+
+            descriptor?.value = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+            gatt.writeDescriptor(descriptor)
+            gatt.readCharacteristic(characteristic)
+            gatt.readDescriptor(descriptor)
         }
-        btGattServicesList[0].characteristics
-        val btGattCharList = btGattServicesList[2].characteristics
-        val btDescList = btGattCharList[1].descriptors
-        val characteristic = btGattCharList[1]
-        val descriptor = btDescList[0]
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        bleGatt?.setCharacteristicNotification(characteristic, true)
-        descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-        charac = characteristic
-        desc = descriptor
+
     }
 
-    fun readData() {
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
+
+    /**
+     * 장비에서 수신한 체온값을 변환
+     * @param byteArray 체온 배열
+     * @return String 체온값
+     */
+    private fun getParsingTemperature(byteArray: ByteArray?): String {
+        if(byteArray == null)
+            return "0.0"
+
+        if(byteArray.size > 5) {
+            //sb.append(String.format("%02x ", byteArray[idx] and 0xff.toByte()))
+            val sb = StringBuffer()
+            sb.append(String.format("%02x", byteArray[3] and 0xff.toByte()))
+            sb.append(String.format("%02x", byteArray[2] and 0xff.toByte()))
+            sb.append(String.format("%02x", byteArray[1] and 0xff.toByte()))
+
+            val temperature = Integer.parseInt(sb.toString(), 16)
+
+            val value: Float = if(String.format("%02x", byteArray[4] and 0xff.toByte()) == "ff") {
+                temperature.toFloat() / 10.toFloat()
+            } else
+                temperature.toFloat() / 100.0f
+
+
+            return value.toString()
         }
-        bleGatt?.writeDescriptor(desc)
-        bleGatt?.readCharacteristic(charac)
-        bleGatt?.readDescriptor(desc)
+        else {
+            return "0.0"
+        }
     }
 }
