@@ -22,7 +22,7 @@ import kotlin.experimental.and
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
-    lateinit var mBluetoothAdapter: BluetoothAdapter
+    private lateinit var mBluetoothAdapter: BluetoothAdapter
     private val mBluetoothManager : BluetoothManager by lazy { applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager }
     private var mBleGatt: BluetoothGatt? = null
     lateinit var mDevice: BluetoothDevice
@@ -90,7 +90,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             super.onServicesDiscovered(gatt, status)
 
@@ -163,8 +162,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("MissingPermission")
-    fun stopScan() {
+    private fun stopScan() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
         mBluetoothAdapter.bluetoothLeScanner?.stopScan(BLEScanCallback)
         mBleGatt = mDevice.connectGatt(applicationContext, false, gattClientCallback)
     }
@@ -184,7 +185,6 @@ class MainActivity : AppCompatActivity() {
             gatt.readCharacteristic(characteristic)
             gatt.readDescriptor(descriptor)
         }
-
     }
 
     /**
