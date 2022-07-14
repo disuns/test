@@ -34,7 +34,24 @@ class MainActivity : AppCompatActivity() {
 
         mBluetoothAdapter = mBluetoothManager.adapter
 
-        permissionRequest()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH,
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ),
+                1
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH
+                ),
+                1
+            )
+        }
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             return
@@ -182,8 +199,8 @@ class MainActivity : AppCompatActivity() {
 
             descriptor?.value = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
             gatt.writeDescriptor(descriptor)
-            gatt.readCharacteristic(characteristic)
-            gatt.readDescriptor(descriptor)
+//            gatt.readCharacteristic(characteristic)
+//            gatt.readDescriptor(descriptor)
         }
     }
 
@@ -215,27 +232,6 @@ class MainActivity : AppCompatActivity() {
         }
         else {
             return "0.0"
-        }
-    }
-
-    private fun permissionRequest(){
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            requestPermissions(
-                arrayOf(
-                    Manifest.permission.BLUETOOTH,
-                    Manifest.permission.BLUETOOTH_CONNECT,
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ),
-                1
-            )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            requestPermissions(
-                arrayOf(
-                    Manifest.permission.BLUETOOTH
-                ),
-                1
-            )
         }
     }
 }
