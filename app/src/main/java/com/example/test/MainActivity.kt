@@ -58,13 +58,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnConnect.setOnClickListener {
-            val filters: MutableList<ScanFilter> = ArrayList()
-            val scanFilter: ScanFilter = ScanFilter.Builder().setServiceUuid(ParcelUuid(UUID.fromString("00001809-0000-1000-8000-00805F9B34FB"))).build()
-            filters.add(scanFilter)
-            val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_POWER).build()
-
-            mBluetoothAdapter.bluetoothLeScanner.startScan(filters, settings, BLEScanCallback)
-            Timer("SettingUp", false).schedule(3000) { stopScan() } }
+            scanFromUUID(UUID.fromString("00001809-0000-1000-8000-00805F9B34FB"), ScanSettings.SCAN_MODE_LOW_POWER)
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -118,6 +113,9 @@ class MainActivity : AppCompatActivity() {
 
             // log for successful discovery
             Log.d("", "Services discovery is successful")
+            if (ActivityCompat.checkSelfPermission(applicationContext,Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                return
+            }
             enableNotify(gatt)
         }
 
@@ -162,8 +160,6 @@ class MainActivity : AppCompatActivity() {
                 binding.tvTemperature.text = getParsingTemperature(characteristic.value)
             }
         }
-
-
     }
 
     /**
@@ -189,6 +185,8 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     private fun enableNotify(gatt: BluetoothGatt?) {
+
+
         val service = gatt?.getService(UUID.fromString("00001809-0000-1000-8000-00805F9B34FB"))
         val characteristic = service!!.getCharacteristic(UUID.fromString("00002a1c-0000-1000-8000-00805F9B34FB"))
 
@@ -227,11 +225,33 @@ class MainActivity : AppCompatActivity() {
             } else
                 temperature.toFloat() / 100.0f
 
-
             return value.toString()
         }
         else {
             return "0.0"
         }
+    }
+
+    private fun scan(scanFilter: ScanFilter, scanModeSettings: Int){
+        val filters: MutableList<ScanFilter> = ArrayList()
+        filters.add(scanFilter)
+
+        val settings = ScanSettings.Builder().setScanMode(scanModeSettings).build()
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        mBluetoothAdapter.bluetoothLeScanner.startScan(filters, settings, BLEScanCallback)
+        Timer("SettingUp", false).schedule(3000) { stopScan() }
+    }
+
+    private fun scanFromUUID(serviceUUID:UUID, scanModeSettings: Int){
+        val scanFilter: ScanFilter = ScanFilter.Builder().setServiceUuid(ParcelUuid(serviceUUID)).build()
+        scan(scanFilter,scanModeSettings)
+    }
+
+    private fun scanFromDeviceName(deviceName:String, scanModeSettings: Int){
+        val scanFilter: ScanFilter = ScanFilter.Builder().setDeviceName(deviceName).build()
+        scan(scanFilter,scanModeSettings)
     }
 }
